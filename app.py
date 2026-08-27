@@ -3,19 +3,26 @@ import pandas as pd
 import google.generativeai as genai
 import io
 
-st.title("📱 複数一括×おまかせ対応！ショート動画台本メーカー")
-st.write("ジャンルを『おまかせ』にすれば、AIが今バズる人間味のあるネタを完全ランダムで考えてくれます。")
+st.title("📱 霊夢＆魔理沙×最大15本一括！ショート動画台本メーカー")
+st.write("Googleの無料AIを使い、霊夢と魔理沙のテンポ良い掛け合い台本を最大15本同時に作成します。")
 
 api_key = st.sidebar.text_input("Gemini API Keyを入力してください", type="password")
 
-# 1. ユーザー入力エリア（おまかせ対応の説明を追加）
+# 1. ユーザー入力エリア
 genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "おまかせ")
 atmosphere = st.text_input("どんな感じの動画がいいか（『おまかせ』や空欄でもOK）", "おまかせ")
 target_seconds = st.selectbox("動画の目標長さ", [15, 30, 60], index=1)
 
-# 一度に作る本数の指定（1〜5本）
-num_scripts = st.slider("一度に作成する動画の本数", min_value=1, max_value=5, value=3)
+# 告知用リンクの入力欄
+custom_link_text = st.text_input(
+    "告知したいリンクや誘導のセリフ（例：固定コメントのリンクをチェック！など）", 
+    "プロフィールのリンクをチェックしてね！"
+)
 
+# ★最大15本まで選択できるようにスライダーを拡張
+num_scripts = st.slider("一度に作成する動画の本数", min_value=1, max_value=15, value=5)
+
+# 必須セリフの定義
 intro_text = "皆さんこんにちは、ドカンパです"
 outro_text_1 = "チャンネル登録と高評価よろしくお願いします"
 outro_text_2 = "ではまた！バイバーイ"
@@ -29,44 +36,51 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
             model = genai.GenerativeModel('gemini-3.6-flash')
             
             # おまかせ判定
-            final_genre = genre if (genre.strip() and genre != "おまかせ") else "今ネットでバズりそうな、人間味のある面白いトレンドネタ（あるある、雑学、心理学、ライフハックなど何でも可）"
-            final_atmosphere = atmosphere if (atmosphere.strip() and atmosphere != "おまかせ") else "共感できる、クスッと笑える、テンポが良い"
+            final_genre = genre if (genre.strip() and genre != "おまかせ") else "今ネットでバズりそうな、人間味のある面白いトレンドネタ（あるある、雑学、心理学、ライフハック、学校ネタなど何でも可）"
+            final_atmosphere = atmosphere if (atmosphere.strip() and atmosphere != "おまかせ") else "霊夢が鋭く（あるいはボケて）喋り、魔理沙が軽快にツッコむテンポの良い掛け合い"
             
-            # プロンプトの構築
+            # 2人用に強化したプロンプトの構築
             prompt = f"""
-            あなたはTikTokやYouTube Shortsで毎日数十万再生される人気クリエイターとして、人間が日常で感じる「あるある」や「ユーモア」を盛り込んだショート動画のネタを【合計 {num_scripts} 本】考えてください。
+            あなたはTikTokやYouTube Shortsでバズる動画を手がける天才放送作家です。
+            「霊夢（れいむ）」と「魔理沙（まりさ）」の2人が、人間味あふれるリアルで面白い掛け合いをするショート動画のネタを【合計 {num_scripts} 本】考えてください。
             
             【超重要ルール】
-            それぞれの動画の内容や切り口、テーマ、ジャンルは、すべて全く異なるエピソードやネタにしてください。（同じような話の使い回しは絶対に禁止です）
-            AI特有の不自然な解説や無機質な正論は禁止です。
+            1. それぞれの動画の内容やテーマは、すべて全く異なるエピソードやネタにしてください（使い回し厳禁）。
+            2. キャラクターのセリフの先頭につける名前は、必ず「霊夢」または「魔理沙」にしてください。
+            3. AI特有の不自然な解説や無機質な正論は禁止です。人間が日常で感じる「本音」や「クスッと笑えるユーモア」をベースにしてください。
             
             【動画1本あたりの条件】
             ・ジャンル: {final_genre}
             ・雰囲気: {final_atmosphere}
-            ・長さ: {target_seconds}秒に収まるテンポ
+            ・長さ: {target_seconds}秒に収まる、1行あたり15文字前後の短いリズミカルなテンポ
             
             【動画1本あたりの構成ルール】
-            1. 最初の一行は必ず「{intro_text}」にする。
-            2. 最後は必ず順番に「{outro_text_1}」「{outro_text_2}」にする。
-            3. メインの話し手は「ドカンパ」にする。
+            1. 最初の一行は、必ず話し手を「霊夢」にして「霊夢,{intro_text}」から始めてください。その直後に魔理沙が挨拶を返すなどして本編に入ってください。
+            2. 本編の話（ボケとツッコミの掛け合い）が終わって、エンディングに入る直前に、必ず自然な流れでどちらかのキャラクターが「{custom_link_text}」というセリフを入れてください。
+            3. 最後の2行は、必ず話し手を「霊夢」にして、順番に以下の2行で締めくくってください。
+               霊夢,{outro_text_1}
+               霊夢,{outro_text_2}
             
             【出力フォーマット】
             必ず以下のCSV形式のみで出力してください。解説、装飾文字、バッククォート(```)などは一切含めないでください。
             各動画の区切りとして、行の先頭に「---」だけの行を入れて区切ってください。
             
             出力例：
-            ドカンパ,皆さんこんにちは、ドカンパです
-            ドカンパ,（ネタ1の内容）
-            ドカンパ,チャンネル登録と高評価よろしくお願いします
-            ドカンパ,ではまた！バイバーイ
+            霊夢,皆さんこんにちは、ドカンパです
+            魔理沙,うっす、よろしくな！
+            霊夢,（ネタ1の掛け合いボケ）
+            魔理沙,（ネタ1のツッコミ）
+            霊夢,{custom_link_text}
+            霊夢,チャンネル登録と高評価よろしくお願いします
+            霊夢,ではまた！バイバーイ
             ---
-            ドカンパ,皆さんこんにちは、ドカンパです
-            ドカンパ,（ネタ2の内容、ネタ1とは全く違う話・違うジャンル）
-            ドカンパ,チャンネル登録と高評価よろしくお願いします
-            ドカンパ,ではまた！バイバーイ
+            霊夢,皆さんこんにちは、ドカンパです
+            魔理沙,今日もやっていくぜ！
+            霊夢,（ネタ2の掛け合い・ネタ1とは全く違う内容）
+            ...
             """
             
-            with st.spinner(f"{num_scripts}本の異なるネタを計算中..."):
+            with st.spinner(f"{num_scripts}本の異なる掛け合いネタを計算中..."):
                 response = model.generate_content(prompt)
                 raw_output = response.text.strip()
                 
@@ -92,7 +106,7 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                     st.download_button(
                         label=f"動画 {i+1} 本目のCSVをダウンロード", 
                         data=csv_buffer.getvalue().encode('utf-8-sig'),
-                        file_name=f"ymm4_script_part{i+1}.csv", 
+                        file_name=f"ymm4_reimu_marisa_part{i+1}.csv", 
                         mime="text/csv",
                         key=f"btn_{i}"
                     )
