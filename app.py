@@ -22,7 +22,7 @@ if st.button("人間味のある台本を生成する"):
         try:
             # Geminiの設定
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.5-flash') # 高速・高機能な無料対応モデル
+            model = genai.GenerativeModel('gemini-3.6-flash')
             
             prompt = f"""
             あなたはTikTokやYouTube Shortsでバズる人気クリエイターとして、人間が日常で感じる「あるある」や「ユーモア」を盛り込んだショート動画のネタを考えてください。AI特有の不自然な解説は禁止です。
