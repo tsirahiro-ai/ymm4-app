@@ -3,8 +3,8 @@ import pandas as pd
 import google.generativeai as genai
 import io
 
-st.title("📱 霊夢＆魔理沙×最大15本一括！ショート動画台本メーカー")
-st.write("Googleの無料AIを使い、霊夢と魔理沙のテンポ良い掛け合い台本を最大15本同時に作成します。")
+st.title("📱 一括統合DL対応！霊夢＆魔理沙 ショート動画台本メーカー")
+st.write("Googleの無料AIを使い、霊夢と魔理沙の掛け合い台本を作成します。全動画を1つにまとめた一括ダウンロードに対応！")
 
 api_key = st.sidebar.text_input("Gemini API Keyを入力してください", type="password")
 
@@ -13,7 +13,7 @@ genre = st.text_input("動画のジャンル（『おまかせ』や空欄でも
 atmosphere = st.text_input("どんな感じの動画がいいか（『おまかせ』や空欄でもOK）", "おまかせ")
 target_seconds = st.selectbox("動画の目標長さ", [15, 30, 60], index=1)
 
-# ★告知リンク入力欄（空欄や特になしで無しにできるように修正）
+# 告知リンク入力欄
 custom_link_text = st.text_input(
     "告知したいリンクや誘導のセリフ（『特になし』や空欄で非表示になります）", 
     "特になし"
@@ -93,6 +93,15 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                 # 「---」で分割して各動画の台本を処理
                 script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
                 
+                # 全台本を1つに統合するためのリスト
+                all_dfs = []
+                
+                # まず上部に「すべてをまとめた一括ダウンロードボタン」を配置するためのコンテナを作成
+                all_download_container = st.container()
+                all_download_container.write("### 📥 まとめて一括ダウンロード")
+                
+                st.write("---")
+                
                 for i, block in enumerate(script_blocks[:num_scripts]):
                     st.subheader(f"🎬 動画 {i+1} 本目")
                     
@@ -102,18 +111,40 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                     # プレビュー表示
                     st.dataframe(df)
                     
-                    # 各動画ごとに個別のダウンロードボタンを用意
+                    # 統合用リストに追加
+                    all_dfs.append(df)
+                    
+                    # 各動画ごとの個別ダウンロードボタン
                     csv_buffer = io.StringIO()
                     df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
                     
                     st.download_button(
-                        label=f"動画 {i+1} 本目のCSVをダウンロード", 
+                        label=f"動画 {i+1} 本目だけをダウンロード", 
                         data=csv_buffer.getvalue().encode('utf-8-sig'),
                         file_name=f"ymm4_script_part{i+1}.csv", 
                         mime="text/csv",
                         key=f"btn_{i}"
                     )
                     st.write("---")
+                
+                # 全動画の台本が揃ったら、1つのファイルにまとめる処理
+                if all_dfs:
+                    combined_csv_content = "キャラクター名,セリフ\n"
+                    for current_df in all_dfs:
+                        # ヘッダー（キャラクター名,セリフ）を除いたデータ部分のみをテキスト化
+                        csv_text = current_df.to_csv(index=False, header=False, encoding="utf-8-sig")
+                        combined_csv_content += csv_text
+                        combined_csv_content += ",\n"  # 動画の区切りとして空行（カンマのみの行）を追加
+                    
+                    # 一括ダウンロードボタンを最上部のコンテナ内にレンダリング
+                    all_download_container.download_button(
+                        label=f"🔥 全 {len(all_dfs)} 本のネタを1つのファイルにまとめてダウンロード",
+                        data=combined_csv_content.encode('utf-8-sig'),
+                        file_name=f"ymm4_all_scripts_combined.csv",
+                        mime="text/csv",
+                        key="btn_all_combined"
+                    )
+                    all_download_container.success("一括ダウンロードファイルの準備が完了しました！")
                     
         except Exception as e:
             st.error(f"エラーが発生しました: {e}")
