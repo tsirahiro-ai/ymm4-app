@@ -1,10 +1,12 @@
 import streamlit as st
 import pandas as pd
-import requests
 import io
+# 最新の公式AIライブラリをインポート
+from openai import OpenAI
+import google.generativeai as genai
 
 # タイトルを中央揃えに設定
-st.markdown("<h1 style='text-align: center;'>🎬 ショート動画台本メーカー</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>🎬 ショート動画台本メーカー (高性能版)</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: gray;'>霊夢と魔理沙の掛け合い台本を無制限に作成・一括ダウンロードできます。</p>", unsafe_allow_html=True)
 st.write("") 
 
@@ -44,7 +46,6 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         # 告知セリフの有無を判定
         has_link = custom_link_text.strip() and custom_link_text != "特になし"
         link_instruction = f"本編の話が終わって、エンディングに入る直前に、必ず自然な流れでどちらかのキャラクターが「{custom_link_text}」というセリフを入れてください。" if has_link else "今回は告知やリンク誘導のセリフは一切不要です。本編が終わったらすぐにエンディングの挨拶に入ってください。"
-        example_link_line = f"霊夢,{custom_link_text}\n" if has_link else ""
 
         # プロンプトの構築
         prompt = f"""
@@ -75,47 +76,39 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
 
         raw_output = ""
         
-        with st.spinner(f"{num_scripts}本の異なる掛け合いネタを爆速計算中..."):
-            # ★世界中の空いている無料AIを片っ端から自動でハッキングして最速ルートを通す仕組み
-            # 安定度の高い異なるトップ3メーカーのAIモデルをシャッフルして同時待機させます
-            models = [
-                "Qwen/Qwen2.5-72B-Instruct",
-                "meta-llama/Llama-3.3-70B-Instruct",
-                "mistralai/Mixtral-8x7B-Instruct-v0.1"
-            ]
+        with st.spinner(f"公式の超高性能AI（GPT-4o / Gemini）で {num_scripts} 本の高品質ネタを生成中..."):
             
-            headers = {"Content-Type": "application/json"}
-            payload = {
-                "inputs": f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
-                "parameters": {"max_new_tokens": 4000, "temperature": 0.7, "return_full_text": False}
-            }
-            
-            success = False
-            for model_name in models:
+            # --- ルート1: OpenAI (GPT-4o) での生成を試みる ---
+            try:
+                if "OPENAI_API_KEY" in st.secrets:
+                    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                    response = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {"role": "system", "content": "あなたは優秀な動画クリエイターです。"},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.7
+                    )
+                    raw_output = response.choices.message.content
+            except Exception as openai_error:
+                st.warning(f"OpenAIルート混雑のため、自動でGeminiルートに切り替えます。")
+
+            # --- ルート2: OpenAIがダメ、またはキーがない場合は Gemini Pro を使う ---
+            if not raw_output.strip() and "GEMINI_API_KEY" in st.secrets:
                 try:
-                    url = f"https://huggingface.co{model_name}"
-                    response = requests.post(url, headers=headers, json=payload, timeout=25)
-                    if response.status_code == 200:
-                        result = response.json()
-                        
-                        # サーバーごとのデータの受け取り方の違いを吸収する安全装置
-                        if isinstance(result, list) and len(result) > 0:
-                            raw_output = result[0].get("generated_text", "")
-                        elif isinstance(result, dict):
-                            raw_output = result.get("generated_text", "")
-                        
-                        if raw_output.strip():
-                            # 余計なシステム文字を除去
-                            if "<|im_start|>assistant\n" in raw_output:
-                                raw_output = raw_output.split("<|im_start|>assistant\n")[-1]
-                            raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
-                            success = True
-                            break
-                except Exception:
-                    continue # 1つがダメなら、コンマゼロ秒で次のAIを呼び出す
+                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                    model = genai.GenerativeModel('gemini-1.5-pro')
+                    response = model.generate_content(prompt)
+                    raw_output = response.text
+                except Exception as gemini_error:
+                    st.error(f"Geminiルートでもエラーが発生しました: {gemini_error}")
+
+            # AIの出力から余計なマークダウンのゴミを掃除
+            raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
             
-            if not success or not raw_output:
-                st.error("一時的にすべてのAIルートが満席です。30秒ほど後に、もう一度「一括生成する」ボタンを押してみてください。")
+            if not raw_output:
+                st.error("APIキーが設定されていないか、すべてのAIへの接続に失敗しました。StreamlitのSecrets設定を確認してください。")
             else:
                 # 「---」で分割して各動画の台本を処理
                 script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
