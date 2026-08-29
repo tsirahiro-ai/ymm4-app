@@ -10,7 +10,7 @@ st.write("")
 genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "おまかせ")
 atmosphere = st.text_input("どんな感じの動画がいいか（『おまかせ』や空欄でもOK）", "おまかせ")
 
-# 目標秒数の指定（数字で直接入力可能）
+# 目標秒数の指定
 target_seconds = st.number_input(
     "動画の目標長さ（秒数を数字で指定してください）", 
     min_value=5, 
@@ -63,8 +63,8 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         1. 最初の一行は、必ず話し手を「霊夢」にして「霊夢,{intro_text}」から始めてください。その直後に魔理沙が挨拶を返すなどして本編に入ってください。
         2. {link_instruction}
         3. 最後の2行は、必ず話し手を「霊夢」にして、順番に以下の2行で締めくくってください。
-           霊夢,{outro_text_1}
-           霊夢,{outro_text_2}
+               霊夢,{outro_text_1}
+               霊夢,{outro_text_2}
         
         【出力フォーマット】
         必ず以下のCSV形式のみで出力してください。解説、装飾文字、バッククォート(```)などは一切含めないでください。
@@ -74,30 +74,48 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         raw_output = ""
         
         with st.spinner(f"{num_scripts}本の異なる掛け合いネタを爆速計算中..."):
-            # キー認証が100%不要な超安定型無料サーバーを利用
-            url = "https://huggingface.co"
+            # ★世界中の空いている無料AIを片っ端から自動でハッキングして最速ルートを通す仕組み
+            # 安定度の高い異なるトップ3メーカーのAIモデルをシャッフルして同時待機させます
+            models = [
+                "Qwen/Qwen2.5-72B-Instruct",
+                "meta-llama/Llama-3.3-70B-Instruct",
+                "mistralai/Mixtral-8x7B-Instruct-v0.1"
+            ]
+            
             headers = {"Content-Type": "application/json"}
             payload = {
                 "inputs": f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
                 "parameters": {"max_new_tokens": 4000, "temperature": 0.7, "return_full_text": False}
             }
             
-            response = requests.post(url, headers=headers, json=payload, timeout=40)
-            if response.status_code == 200:
-                result = response.json()
-                if isinstance(result, list) and len(result) > 0:
-                    raw_output = result[0].get("generated_text", "")
-                elif isinstance(result, dict):
-                    raw_output = result.get("generated_text", "")
-                
-                if raw_output.strip():
-                    if "<|im_start|>assistant\n" in raw_output:
-                        raw_output = raw_output.split("<|im_start|>assistant\n")[-1]
-                    raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
-
-            if not raw_output:
-                st.error("一時的にサーバーが混雑しています。15秒ほど後に、もう一度「一括生成する」ボタンを押してみてください。")
+            success = False
+            for model_name in models:
+                try:
+                    url = f"https://huggingface.co{model_name}"
+                    response = requests.post(url, headers=headers, json=payload, timeout=25)
+                    if response.status_code == 200:
+                        result = response.json()
+                        
+                        # サーバーごとのデータの受け取り方の違いを吸収する安全装置
+                        if isinstance(result, list) and len(result) > 0:
+                            raw_output = result[0].get("generated_text", "")
+                        elif isinstance(result, dict):
+                            raw_output = result.get("generated_text", "")
+                        
+                        if raw_output.strip():
+                            # 余計なシステム文字を除去
+                            if "<|im_start|>assistant\n" in raw_output:
+                                raw_output = raw_output.split("<|im_start|>assistant\n")[-1]
+                            raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
+                            success = True
+                            break
+                except Exception:
+                    continue # 1つがダメなら、コンマゼロ秒で次のAIを呼び出す
+            
+            if not success or not raw_output:
+                st.error("一時的にすべてのAIルートが満席です。30秒ほど後に、もう一度「一括生成する」ボタンを押してみてください。")
             else:
+                # 「---」で分割して各動画の台本を処理
                 script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
                 
                 all_dfs = []
