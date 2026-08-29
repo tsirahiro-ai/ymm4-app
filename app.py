@@ -13,7 +13,7 @@ else:
     api_key = None
 
 # 1. ユーザー入力エリア
-genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "学校あるある"
+genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "おまかせ"
     "動画の目標長さ（秒数を数字で指定してください）", 
     min_value=5, 
     max_value=60, 
