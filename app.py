@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import io
 import json
+import time
 
 # タイトルを「ショート動画台本メーカー」に変更し、中央揃えにしました
 st.markdown("<h1 style='text-align: center;'>🎬 ショート動画台本メーカー</h1>", unsafe_allow_html=True)
@@ -86,70 +87,87 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         ...
         """
         
+        raw_output = ""
+        
         with st.spinner(f"{num_scripts}本の異なる掛け合いネタを計算中..."):
-            # キーが不要な公開サーバー（無料モデル）へリクエスト
-            API_URL = "https://huggingface.co"
+            # 混雑エラーを回避するため、3つの別々の無料AIサーバーを順番に試す仕組み（バックアップ体制）
+            urls = [
+                "https://huggingface.co",
+                "https://huggingface.co",
+                "https://huggingface.co"
+            ]
+            
             headers = {"Content-Type": "application/json"}
             payload = {
                 "inputs": f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
                 "parameters": {"max_new_tokens": 4000, "temperature": 0.7}
             }
             
-            # 先ほどエラーになっていたカッコの閉じ忘れ部分をしっかりと修正しました
-            response = requests.post(API_URL, headers=headers, json=payload)
+            success = False
+            for url in urls:
+                try:
+                    response = requests.post(url, headers=headers, json=payload, timeout=30)
+                    if response.status_code == 200:
+                        result = response.json()
+                        # レスポンスがリスト形式か辞書形式かによって処理を分ける安全策
+                        if isinstance(result, list) and len(result) > 0 and "generated_text" in result[0]:
+                            raw_output = result[0]["generated_text"]
+                        elif isinstance(result, dict) and "generated_text" in result:
+                            raw_output = result["generated_text"]
+                        
+                        if raw_output:
+                            if "<|im_start|>assistant\n" in raw_output:
+                                raw_output = raw_output.split("<|im_start|>assistant\n")[-1].strip()
+                            success = True
+                            break
+                except Exception:
+                    continue # エラーが起きたら自動で次のサーバーを試す
             
-            if response.status_code == 200:
-                result = response.json()
-                raw_output = result[0]["generated_text"].split("<|im_start|>assistant\n")[-1].strip()
+            if not success or not raw_output:
+                st.error("AIサーバーが一時的に非常に混み合っています。時間を1分ほど置いてから、もう一度「台本を一括生成する」ボタンを押してみてください。")
             else:
-                # 予備のオープンサーバーに切り替え
-                API_URL_ALT = "https://huggingface.co"
-                response = requests.post(API_URL_ALT, headers=headers, json=payload)
-                result = response.json()
-                raw_output = result[0]["generated_text"].split("<|im_start|>assistant\n")[-1].strip()
-            
-            # 余計なマークダウン装飾を除去
-            raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
-            script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
-            
-            all_dfs = []
-            all_download_container = st.container()
-            all_download_container.write("### 📥 まとめて一括ダウンロード")
-            st.write("---")
-            
-            for i, block in enumerate(script_blocks[:num_scripts]):
-                st.subheader(f"🎬 動画 {i+1} 本目")
-                lines = [line.split(",", 1) for line in block.split("\n") if "," in line]
-                df = pd.DataFrame(lines, columns=["キャラクター名", "セリフ"])
-                st.dataframe(df)
-                all_dfs.append(df)
+                # 余計なマークダウン装飾を除去
+                raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
+                script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
                 
-                csv_buffer = io.StringIO()
-                df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
-                st.download_button(
-                    label=f"動画 {i+1} 本目だけをダウンロード", 
-                    data=csv_buffer.getvalue().encode('utf-8-sig'),
-                    file_name=f"ymm4_script_part{i+1}.csv", 
-                    mime="text/csv",
-                    key=f"btn_{i}"
-                )
+                all_dfs = []
+                all_download_container = st.container()
+                all_download_container.write("### 📥 まとめて一括ダウンロード")
                 st.write("---")
-            
-            if all_dfs:
-                combined_csv_content = "キャラクター名,セリフ\n"
-                for current_df in all_dfs:
-                    csv_text = current_df.to_csv(index=False, header=False, encoding="utf-8-sig")
-                    combined_csv_content += csv_text
-                    combined_csv_content += ",\n"
                 
-                all_download_container.download_button(
-                    label=f"🔥 全 {len(all_dfs)} 本のネタを1つのファイルにまとめてダウンロード",
-                    data=combined_csv_content.encode('utf-8-sig'),
-                    file_name=f"ymm4_all_scripts_combined.csv",
-                    mime="text/csv",
-                    key="btn_all_combined"
-                )
-                all_download_container.success("一括ダウンロードファイルの準備が完了しました！")
+                for i, block in enumerate(script_blocks[:num_scripts]):
+                    st.subheader(f"🎬 動画 {i+1} 本目")
+                    lines = [line.split(",", 1) for line in block.split("\n") if "," in line]
+                    df = pd.DataFrame(lines, columns=["キャラクター名", "セリフ"])
+                    st.dataframe(df)
+                    all_dfs.append(df)
+                    
+                    csv_buffer = io.StringIO()
+                    df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+                    st.download_button(
+                        label=f"動画 {i+1} 本目だけをダウンロード", 
+                        data=csv_buffer.getvalue().encode('utf-8-sig'),
+                        file_name=f"ymm4_script_part{i+1}.csv", 
+                        mime="text/csv",
+                        key=f"btn_{i}"
+                    )
+                    st.write("---")
                 
+                if all_dfs:
+                    combined_csv_content = "キャラクター名,セリフ\n"
+                    for current_df in all_dfs:
+                        csv_text = current_df.to_csv(index=False, header=False, encoding="utf-8-sig")
+                        combined_csv_content += csv_text
+                        combined_csv_content += ",\n"
+                    
+                    all_download_container.download_button(
+                        label=f"🔥 全 {len(all_dfs)} 本のネタを1つのファイルにまとめてダウンロード",
+                        data=combined_csv_content.encode('utf-8-sig'),
+                        file_name=f"ymm4_all_scripts_combined.csv",
+                        mime="text/csv",
+                        key="btn_all_combined"
+                    )
+                    all_download_container.success("一括ダウンロードファイルの準備が完了しました！")
+                    
     except Exception as e:
         st.error(f"エラーが発生しました: {e}")
