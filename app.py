@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
-from groq import Groq
+import requests
 import io
+import json
 
-st.title("ショート動画台本メーカー")
-st.write("キー入力・裏設定不要！回数制限なしの無料AIを使い、霊夢と魔理沙の掛け合い台本を無制限に作成・一括ダウンロードできます。")
-
-# ★ご要望通り、コードの中にAPIキーを完全に練り込みました！
-api_key = "gsk_AQ.Ab8RN6K3j8qzhBXHV448IxfhWm-cVM91MfxDaWfXeZNWPUvDAw"
+# ★タイトルを「ショート動画台本メーカー」に変更し、HTMLを使って中央揃えにしました
+st.markdown("<h1 style='text-align: center;'>🎬 ショート動画台本メーカー</h1>", unsafe_style=True)
+st.markdown("<p style='text-align: center; color: gray;'>霊夢と魔理沙の掛け合い台本を無制限に作成・一括ダウンロードできます。</p>", unsafe_style=True)
+st.write("") # スペース空け
 
 # 1. ユーザー入力エリア
 genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "おまかせ")
@@ -38,8 +38,6 @@ outro_text_2 = "ではまた！バイバーイ"
 
 if st.button(f"台本を {num_scripts} 本一括生成する"):
     try:
-        client = Groq(api_key=api_key)
-        
         # おまかせ判定
         final_genre = genre if (genre.strip() and genre != "おまかせ") else "今ネットでバズりそうな、人間味のある面白いトレンドネタ（あるある、雑学、心理学、ライフハック、学校ネタなど何でも可）"
         final_atmosphere = atmosphere if (atmosphere.strip() and atmosphere != "おまかせ") else "霊夢が鋭く（あるいはボケて）喋り、魔理沙が軽快にツッコむテンポの良い掛け合い"
@@ -88,12 +86,28 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         ...
         """
         
-        with st.spinner(f"{num_scripts}本の異なる掛け合いネタを爆速計算中..."):
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt}]
+        with st.spinner(f"{num_scripts}本の異なる掛け合いネタを計算中..."):
+            # キーが不要な公開サーバー（無料モデル）へリクエスト
+            API_URL = "https://huggingface.co"
+            headers = {"Content-Type": "application/json"}
+            payload = {
+                "inputs": f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
+                "parameters": {"max_new_tokens": 4000, "temperature": 0.7}
             )
-            raw_output = response.choices.message.content.strip()
+            
+            response = requests.post(API_URL, headers=headers, json=payload)
+            
+            if response.status_code == 200:
+                result = response.json()
+                raw_output = result["generated_text"].split("<|im_start|>assistant\n")[-1].strip()
+            else:
+                # 予備のオープンサーバーに切り替え
+                API_URL_ALT = "https://huggingface.co"
+                response = requests.post(API_URL_ALT, headers=headers, json=payload)
+                result = response.json()
+                raw_output = result["generated_text"].split("<|im_start|>assistant\n")[-1].strip()
+            
+            # 余計なマークダウン装飾を除去
             raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
             script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
             
