@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 import io
+import zipfile  # ★複数のファイルを1つにまとめるためのシステムを追加
 
 # タイトルやロゴなどの表示をすべて削除し、すぐに使えるスッキリした画面
 st.write("") 
@@ -46,7 +47,6 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         try:
             # Geminiの設定
             genai.configure(api_key=API_KEY)
-            # ★指示通り最新のgemini-3.6-flashにアップデートしました
             model = genai.GenerativeModel('gemini-3.6-flash') 
             
             # おまかせ判定
@@ -93,8 +93,10 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                 script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
                 
                 all_dfs = []
-                all_download_container = st.container()
-                all_download_container.write("### 📥 まとめて一括ダウンロード")
+                
+                # ★上部に「すべてのCSVファイルをバラバラのまま1つのZIPにまとめて保存するボタン」を配置
+                zip_download_container = st.container()
+                zip_download_container.write("### 📥 バラバラのCSVを一括ダウンロード")
                 st.write("---")
                 
                 for i, block in enumerate(script_blocks[:num_scripts]):
@@ -102,8 +104,9 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                     lines = [line.split(",", 1) for line in block.split("\n") if "," in line]
                     df = pd.DataFrame(lines, columns=["キャラクター名", "セリフ"])
                     st.dataframe(df)
-                    all_dfs.append(df)
+                    all_dfs.append((f"ymm4_script_part{i+1}.csv", df)) # ファイル名と中身をセットで保存
                     
+                    # 単品で保存したいとき用のボタンも残してあります
                     csv_buffer = io.StringIO()
                     df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
                     st.download_button(
@@ -115,21 +118,25 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                     )
                     st.write("---")
                 
+                # ★バラバラのCSVをZIPフォルダーにまとめる魔法の処理
                 if all_dfs:
-                    combined_csv_content = "キャラクター名,セリフ\n"
-                    for current_df in all_dfs:
-                        csv_text = current_df.to_csv(index=False, header=False, encoding="utf-8-sig")
-                        combined_csv_content += csv_text
-                        combined_csv_content += ",\n"
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                        for file_name, current_df in all_dfs:
+                            csv_buffer = io.StringIO()
+                            current_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+                            # ZIPの中にバラバラのファイルとして書き込む
+                            zf.writestr(file_name, csv_buffer.getvalue().encode('utf-8-sig'))
                     
-                    all_download_container.download_button(
-                        label=f"🔥 全 {len(all_dfs)} 本のネタを1つのファイルにまとめてダウンロード",
-                        data=combined_csv_content.encode('utf-8-sig'),
-                        file_name=f"ymm4_all_scripts_combined.csv",
-                        mime="text/csv",
-                        key="btn_all_combined"
+                    # 画面最上部にボタンを表示
+                    zip_download_container.download_button(
+                        label=f"🔥 全 {len(all_dfs)} 本の台本を別々のCSVファイルとしてまとめて一括ダウンロード(ZIP)",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"ymm4_all_scripts_files.zip",
+                        mime="application/zip",
+                        key="btn_all_zip"
                     )
-                    all_download_container.success("一括ダウンロードファイルの準備が完了しました！")
+                    zip_download_container.success("ZIPファイルの準備が完了しました！解凍するとバラバラのCSVが現れます！")
                     
         except Exception as e:
             st.error(f"エラーが発生しました: {e}")
