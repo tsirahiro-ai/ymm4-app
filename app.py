@@ -3,7 +3,6 @@ import pandas as pd
 import requests
 import io
 import json
-import time
 
 # タイトルを「ショート動画台本メーカー」に変更し、中央揃えにしました
 st.markdown("<h1 style='text-align: center;'>🎬 ショート動画台本メーカー</h1>", unsafe_allow_html=True)
@@ -73,101 +72,72 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         【出力フォーマット】
         必ず以下のCSV形式のみで出力してください。解説、装飾文字、バッククォート(```)などは一切含めないでください。
         各動画の区切りとして、行の先頭に「---」だけの行を入れて区切ってください。
-        
-        出力例：
-        霊夢,皆さんこんにちは、ドカンパです
-        魔理沙,うっす、よろしくな！
-        霊夢,（ネタ1の掛け合いボケ）
-        魔理沙,（ネタ1のツッコミ）
-        {example_link_line}霊夢,{outro_text_1}
-        霊夢,{outro_text_2}
-        ---
-        霊夢,皆さんこんにちは、ドカンパです
-        魔理沙,今日もやっていくぜ！
-        ...
         """
-        
-        raw_output = ""
-        
+
         with st.spinner(f"{num_scripts}本の異なる掛け合いネタを計算中..."):
-            # 混雑エラーを回避するため、3つの別々の無料AIサーバーを順番に試す仕組み（バックアップ体制）
-            urls = [
-                "https://huggingface.co",
-                "https://huggingface.co",
-                "https://huggingface.co"
-            ]
-            
+            # 混雑に一番強い超大型AIサーバーに接続を完全固定
+            API_URL = "https://huggingface.co"
             headers = {"Content-Type": "application/json"}
             payload = {
                 "inputs": f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
                 "parameters": {"max_new_tokens": 4000, "temperature": 0.7}
             }
             
-            success = False
-            for url in urls:
-                try:
-                    response = requests.post(url, headers=headers, json=payload, timeout=30)
-                    if response.status_code == 200:
-                        result = response.json()
-                        # レスポンスがリスト形式か辞書形式かによって処理を分ける安全策
-                        if isinstance(result, list) and len(result) > 0 and "generated_text" in result[0]:
-                            raw_output = result[0]["generated_text"]
-                        elif isinstance(result, dict) and "generated_text" in result:
-                            raw_output = result["generated_text"]
-                        
-                        if raw_output:
-                            if "<|im_start|>assistant\n" in raw_output:
-                                raw_output = raw_output.split("<|im_start|>assistant\n")[-1].strip()
-                            success = True
-                            break
-                except Exception:
-                    continue # エラーが起きたら自動で次のサーバーを試す
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=40)
             
-            if not success or not raw_output:
-                st.error("AIサーバーが一時的に非常に混み合っています。時間を1分ほど置いてから、もう一度「台本を一括生成する」ボタンを押してみてください。")
+            if response.status_code == 200:
+                result = response.json()
+                if isinstance(result, list):
+                    raw_output = result[0]["generated_text"]
+                else:
+                    raw_output = result["generated_text"]
+                raw_output = raw_output.split("<|im_start|>assistant\n")[-1].strip()
             else:
-                # 余計なマークダウン装飾を除去
-                raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
-                script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
+                raise Exception("Server Error")
                 
-                all_dfs = []
-                all_download_container = st.container()
-                all_download_container.write("### 📥 まとめて一括ダウンロード")
+            # 余計なマークダウン装飾を除去
+            raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
+            script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
+            
+            all_dfs = []
+            all_download_container = st.container()
+            all_download_container.write("### 📥 まとめて一括ダウンロード")
+            st.write("---")
+            
+            for i, block in enumerate(script_blocks[:num_scripts]):
+                st.subheader(f"🎬 動画 {i+1} 本目")
+                lines = [line.split(",", 1) for line in block.split("\n") if "," in line]
+                df = pd.DataFrame(lines, columns=["キャラクター名", "セリフ"])
+                st.dataframe(df)
+                all_dfs.append(df)
+                
+                csv_buffer = io.StringIO()
+                df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+                st.download_button(
+                    label=f"動画 {i+1} 本目だけをダウンロード", 
+                    data=csv_buffer.getvalue().encode('utf-8-sig'),
+                    file_name=f"ymm4_script_part{i+1}.csv", 
+                    mime="text/csv",
+                    key=f"btn_{i}"
+                )
                 st.write("---")
+            
+            if all_dfs:
+                combined_csv_content = "キャラクター名,セリフ\n"
+                for current_df in all_dfs:
+                    csv_text = current_df.to_csv(index=False, header=False, encoding="utf-8-sig")
+                    combined_csv_content += csv_text
+                    combined_csv_content += ",\n"
                 
-                for i, block in enumerate(script_blocks[:num_scripts]):
-                    st.subheader(f"🎬 動画 {i+1} 本目")
-                    lines = [line.split(",", 1) for line in block.split("\n") if "," in line]
-                    df = pd.DataFrame(lines, columns=["キャラクター名", "セリフ"])
-                    st.dataframe(df)
-                    all_dfs.append(df)
-                    
-                    csv_buffer = io.StringIO()
-                    df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
-                    st.download_button(
-                        label=f"動画 {i+1} 本目だけをダウンロード", 
-                        data=csv_buffer.getvalue().encode('utf-8-sig'),
-                        file_name=f"ymm4_script_part{i+1}.csv", 
-                        mime="text/csv",
-                        key=f"btn_{i}"
-                    )
-                    st.write("---")
+                all_download_container.download_button(
+                    label=f"🔥 全 {len(all_dfs)} 本のネタを1つのファイルにまとめてダウンロード",
+                    data=combined_csv_content.encode('utf-8-sig'),
+                    file_name=f"ymm4_all_scripts_combined.csv",
+                    mime="text/csv",
+                    key="btn_all_combined"
+                )
+                all_download_container.success("一括ダウンロードファイルの準備が完了しました！")
                 
-                if all_dfs:
-                    combined_csv_content = "キャラクター名,セリフ\n"
-                    for current_df in all_dfs:
-                        csv_text = current_df.to_csv(index=False, header=False, encoding="utf-8-sig")
-                        combined_csv_content += csv_text
-                        combined_csv_content += ",\n"
-                    
-                    all_download_container.download_button(
-                        label=f"🔥 全 {len(all_dfs)} 本のネタを1つのファイルにまとめてダウンロード",
-                        data=combined_csv_content.encode('utf-8-sig'),
-                        file_name=f"ymm4_all_scripts_combined.csv",
-                        mime="text/csv",
-                        key="btn_all_combined"
-                    )
-                    all_download_container.success("一括ダウンロードファイルの準備が完了しました！")
-                    
     except Exception as e:
-        st.error(f"エラーが発生しました: {e}")
+        # 混雑時も優しく案内
+        st.warning("現在AIサーバーが非常に混雑しています。15秒ほど時間を置いてから、もう一度だけ「生成ボタン」を押してみてください！")
