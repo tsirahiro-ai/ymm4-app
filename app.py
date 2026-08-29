@@ -6,18 +6,22 @@ import io
 st.title("ショート動画台本メーカー")
 st.write("キー入力不要！回数制限なしの無料AIを使い、霊夢と魔理沙の掛け合い台本を無制限に作成・一括ダウンロードできます。")
 
-# ★画面からのAPIキー入力を不要にしました（裏側のSecretsから自動取得）
+# 裏側のSecretsからAPIキーを自動取得
 if "GROQ_API_KEY" in st.secrets:
     api_key = st.secrets["GROQ_API_KEY"]
 else:
     api_key = None
 
-# 1. ユーザー入力エリア
-genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "おまかせ"
+# 1. ユーザー入力エリア（エラーが出ないよう完全に修正しました）
+genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "おまかせ")
+atmosphere = st.text_input("どんな感じの動画がいいか（『おまかせ』や空欄でもOK）", "おまかせ")
+
+# 目標秒数の指定
+target_seconds = st.number_input(
     "動画の目標長さ（秒数を数字で指定してください）", 
     min_value=5, 
     max_value=60, 
-    value=29,
+    value=30,
     step=1
 )
 
