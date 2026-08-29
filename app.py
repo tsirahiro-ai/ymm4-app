@@ -4,14 +4,22 @@ import google.generativeai as genai
 import io
 
 st.title("📱 一括統合DL対応！霊夢＆魔理沙 ショート動画台本メーカー")
-st.write("Googleの無料AIを使い、霊夢と魔理沙の掛け合い台本を作成します。全動画を1つにまとめた一括ダウンロードに対応！")
+st.write("Googleの無料AIを使い、霊夢と魔理沙の掛け合い台本を作成します。秒数を数字で自由に指定できるようになりました！")
 
 api_key = st.sidebar.text_input("Gemini API Keyを入力してください", type="password")
 
 # 1. ユーザー入力エリア
 genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "おまかせ")
 atmosphere = st.text_input("どんな感じの動画がいいか（『おまかせ』や空欄でもOK）", "おまかせ")
-target_seconds = st.selectbox("動画の目標長さ", [15, 30, 60], index=1)
+
+# ★新機能：目標秒数を自由な数字で直接指定できるように変更（15秒〜60秒、初期値30秒）
+target_seconds = st.number_input(
+    "動画の目標長さ（秒数を数字で指定してください）", 
+    min_value=5, 
+    max_value=60, 
+    value=30,
+    step=1
+)
 
 # 告知リンク入力欄
 custom_link_text = st.text_input(
@@ -33,7 +41,8 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
     else:
         try:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-3.6-flash')
+            # 先ほど制限エラー対策で変更した「gemini-2.0-flash」にしています
+            model = genai.GenerativeModel('gemini-2.0-flash')
             
             # おまかせ判定
             final_genre = genre if (genre.strip() and genre != "おまかせ") else "今ネットでバズりそうな、人間味のある面白いトレンドネタ（あるある、雑学、心理学、ライフハック、学校ネタなど何でも可）"
@@ -57,7 +66,7 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
             【動画1本あたりの条件】
             ・ジャンル: {final_genre}
             ・雰囲気: {final_atmosphere}
-            ・長さ: {target_seconds}秒に収まる、1行あたり15文字前後の短いリズミカルなテンポ
+            ・長さ: きっちり【 {target_seconds} 秒 】に収まる、1行あたり15文字前後の短いリズミカルなテンポ
             
             【動画1本あたりの構成ルール】
             1. 最初の一行は、必ず話し手を「霊夢」にして「霊夢,{intro_text}」から始めてください。その直後に魔理沙が挨拶を返すなどして本編に入ってください。
@@ -131,10 +140,10 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                 if all_dfs:
                     combined_csv_content = "キャラクター名,セリフ\n"
                     for current_df in all_dfs:
-                        # ヘッダー（キャラクター名,セリフ）を除いたデータ部分のみをテキスト化
+                        # ヘッダーを除いたデータ部分のみをテキスト化
                         csv_text = current_df.to_csv(index=False, header=False, encoding="utf-8-sig")
                         combined_csv_content += csv_text
-                        combined_csv_content += ",\n"  # 動画の区切りとして空行（カンマのみの行）を追加
+                        combined_csv_content += ",\n"  # 動画の区切りとして空行を追加
                     
                     # 一括ダウンロードボタンを最上部のコンテナ内にレンダリング
                     all_download_container.download_button(
