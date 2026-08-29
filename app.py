@@ -3,21 +3,21 @@ import pandas as pd
 from groq import Groq
 import io
 
-st.title("ショート動画台本メーカー")
-st.write("回数制限なしの無料AIを使い、霊夢と魔理沙の掛け合い台本を無制限に作成・一括ダウンロードできます！")
+st.title("📱 【完全自動・無限版】霊夢＆魔理沙 ショート動画台本メーカー")
+st.write("キー入力不要！回数制限なしの無料AIを使い、霊夢と魔理沙の掛け合い台本を無制限に作成・一括ダウンロードできます。")
 
-api_key = st.sidebar.text_input("Groq API Keyを入力してください", type="password")
+# ★画面からのAPIキー入力を不要にしました（裏側のSecretsから自動取得）
+if "GROQ_API_KEY" in st.secrets:
+    api_key = st.secrets["GROQ_API_KEY"]
+else:
+    api_key = None
 
 # 1. ユーザー入力エリア
-genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "おまかせ")
-atmosphere = st.text_input("どんな感じの動画がいいか（『おまかせ』や空欄でもOK）", "おまかせ")
-
-# 目標秒数の指定
-target_seconds = st.number_input(
+genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "学校あるある"
     "動画の目標長さ（秒数を数字で指定してください）", 
     min_value=5, 
     max_value=60, 
-    value=30,
+    value=45,
     step=1
 )
 
@@ -37,10 +37,9 @@ outro_text_2 = "ではまた！バイバーイ"
 
 if st.button(f"台本を {num_scripts} 本一括生成する"):
     if not api_key:
-        st.error("左側のサイドバーにGroqのAPIキーを入力してください。")
+        st.error("アプリの裏設定（Secrets）にGroqのAPIキーが登録されていません。設定を完了させてください。")
     else:
         try:
-            # Groqの超高速・制限なしAIモデルを設定
             client = Groq(api_key=api_key)
             
             # おまかせ判定
@@ -93,15 +92,11 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
             
             with st.spinner(f"{num_scripts}本の異なる掛け合いネタを爆速計算中..."):
                 response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile", # 高性能かつ無制限に使える無料対応モデル
+                    model="llama-3.3-70b-versatile",
                     messages=[{"role": "user", "content": prompt}]
                 )
-                raw_output = response.choices[0].message.content.strip()
-                
-                # 余計なマークダウン装飾を除去
+                raw_output = response.choices.message.content.strip()
                 raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
-                
-                # 「---」で分割して各動画の台本を処理
                 script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
                 
                 all_dfs = []
@@ -111,16 +106,13 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                 
                 for i, block in enumerate(script_blocks[:num_scripts]):
                     st.subheader(f"🎬 動画 {i+1} 本目")
-                    
                     lines = [line.split(",", 1) for line in block.split("\n") if "," in line]
                     df = pd.DataFrame(lines, columns=["キャラクター名", "セリフ"])
-                    
                     st.dataframe(df)
                     all_dfs.append(df)
                     
                     csv_buffer = io.StringIO()
                     df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
-                    
                     st.download_button(
                         label=f"動画 {i+1} 本目だけをダウンロード", 
                         data=csv_buffer.getvalue().encode('utf-8-sig'),
