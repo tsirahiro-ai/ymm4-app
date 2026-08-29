@@ -1,18 +1,18 @@
 import streamlit as st
 import pandas as pd
-import google.generativeai as genai
+from groq import Groq
 import io
 
-st.title("📱 一括統合DL対応！霊夢＆魔理沙 ショート動画台本メーカー")
-st.write("Googleの無料AIを使い、霊夢と魔理沙の掛け合い台本を作成します。秒数を数字で自由に指定できるようになりました！")
+st.title("📱 【無限・爆速版】霊夢＆魔理沙 ショート動画台本メーカー")
+st.write("回数制限なしの無料AIを使い、霊夢と魔理沙の掛け合い台本を無制限に作成・一括ダウンロードできます！")
 
-api_key = st.sidebar.text_input("Gemini API Keyを入力してください", type="password")
+api_key = st.sidebar.text_input("Groq API Keyを入力してください", type="password")
 
 # 1. ユーザー入力エリア
 genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "おまかせ")
 atmosphere = st.text_input("どんな感じの動画がいいか（『おまかせ』や空欄でもOK）", "おまかせ")
 
-# ★新機能：目標秒数を自由な数字で直接指定できるように変更（15秒〜60秒、初期値30秒）
+# 目標秒数の指定
 target_seconds = st.number_input(
     "動画の目標長さ（秒数を数字で指定してください）", 
     min_value=5, 
@@ -37,12 +37,11 @@ outro_text_2 = "ではまた！バイバーイ"
 
 if st.button(f"台本を {num_scripts} 本一括生成する"):
     if not api_key:
-        st.error("左側のサイドバーにGeminiのAPIキーを入力してください。")
+        st.error("左側のサイドバーにGroqのAPIキーを入力してください。")
     else:
         try:
-            genai.configure(api_key=api_key)
-            # 先ほど制限エラー対策で変更した「gemini-2.0-flash」にしています
-            model = genai.GenerativeModel('gemini-2.0-flash')
+            # Groqの超高速・制限なしAIモデルを設定
+            client = Groq(api_key=api_key)
             
             # おまかせ判定
             final_genre = genre if (genre.strip() and genre != "おまかせ") else "今ネットでバズりそうな、人間味のある面白いトレンドネタ（あるある、雑学、心理学、ライフハック、学校ネタなど何でも可）"
@@ -92,9 +91,12 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
             ...
             """
             
-            with st.spinner(f"{num_scripts}本の異なる掛け合いネタを計算中..."):
-                response = model.generate_content(prompt)
-                raw_output = response.text.strip()
+            with st.spinner(f"{num_scripts}本の異なる掛け合いネタを爆速計算中..."):
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile", # 高性能かつ無制限に使える無料対応モデル
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                raw_output = response.choices[0].message.content.strip()
                 
                 # 余計なマークダウン装飾を除去
                 raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
@@ -102,13 +104,9 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                 # 「---」で分割して各動画の台本を処理
                 script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
                 
-                # 全台本を1つに統合するためのリスト
                 all_dfs = []
-                
-                # まず上部に「すべてをまとめた一括ダウンロードボタン」を配置するためのコンテナを作成
                 all_download_container = st.container()
                 all_download_container.write("### 📥 まとめて一括ダウンロード")
-                
                 st.write("---")
                 
                 for i, block in enumerate(script_blocks[:num_scripts]):
@@ -117,13 +115,9 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                     lines = [line.split(",", 1) for line in block.split("\n") if "," in line]
                     df = pd.DataFrame(lines, columns=["キャラクター名", "セリフ"])
                     
-                    # プレビュー表示
                     st.dataframe(df)
-                    
-                    # 統合用リストに追加
                     all_dfs.append(df)
                     
-                    # 各動画ごとの個別ダウンロードボタン
                     csv_buffer = io.StringIO()
                     df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
                     
@@ -136,16 +130,13 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                     )
                     st.write("---")
                 
-                # 全動画の台本が揃ったら、1つのファイルにまとめる処理
                 if all_dfs:
                     combined_csv_content = "キャラクター名,セリフ\n"
                     for current_df in all_dfs:
-                        # ヘッダーを除いたデータ部分のみをテキスト化
                         csv_text = current_df.to_csv(index=False, header=False, encoding="utf-8-sig")
                         combined_csv_content += csv_text
-                        combined_csv_content += ",\n"  # 動画の区切りとして空行を追加
+                        combined_csv_content += ",\n"
                     
-                    # 一括ダウンロードボタンを最上部のコンテナ内にレンダリング
                     all_download_container.download_button(
                         label=f"🔥 全 {len(all_dfs)} 本のネタを1つのファイルにまとめてダウンロード",
                         data=combined_csv_content.encode('utf-8-sig'),
