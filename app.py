@@ -46,7 +46,8 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         try:
             # Geminiの設定
             genai.configure(api_key=API_KEY)
-            model = genai.GenerativeModel('gemini-2.5-flash') # 完全無料で最も安定している最新モデル
+            # ★指示通り最新のgemini-3.6-flashにアップデートしました
+            model = genai.GenerativeModel('gemini-3.6-flash') 
             
             # おまかせ判定
             final_genre = genre if (genre.strip() and genre != "おまかせ") else "今ネットでバズりそうな、人間味のある面白いトレンドネタ（あるある、雑学、心理学、ライフハック、学校ネタなど何でも可）"
