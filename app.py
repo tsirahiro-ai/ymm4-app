@@ -3,7 +3,7 @@ import pandas as pd
 from openai import OpenAI
 import io
 
-st.title("📱 霊夢＆魔理沙×最大15本一括！ショート動画台本メーカー")
+st.title("ショート動画台本メーカー")
 st.write("霊夢と魔理沙のテンポ良い掛け合い台本を最大15本同時に作成し、一括ダウンロードできます。")
 
 # ★GitHubの警告を回避するため、隠し金庫（Secrets）から安全にキーを読み込む設定に変更
