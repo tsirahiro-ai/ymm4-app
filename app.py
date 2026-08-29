@@ -3,7 +3,7 @@ import pandas as pd
 from groq import Groq
 import io
 
-st.title("📱 【完全自動・無限版】霊夢＆魔理沙 ショート動画台本メーカー")
+st.title("ショート動画台本メーカー")
 st.write("キー入力不要！回数制限なしの無料AIを使い、霊夢と魔理沙の掛け合い台本を無制限に作成・一括ダウンロードできます。")
 
 # ★画面からのAPIキー入力を不要にしました（裏側のSecretsから自動取得）
@@ -17,7 +17,7 @@ genre = st.text_input("動画のジャンル（『おまかせ』や空欄でも
     "動画の目標長さ（秒数を数字で指定してください）", 
     min_value=5, 
     max_value=60, 
-    value=45,
+    value=29,
     step=1
 )
 
