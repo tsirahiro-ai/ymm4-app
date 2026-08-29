@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 import io
-import json
 
 # タイトルやロゴなどの表示をすべて削除し、すぐに使えるスッキリした画面
 st.write("") 
@@ -75,34 +74,34 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         raw_output = ""
         
         with st.spinner(f"{num_scripts}本の異なる掛け合いネタを爆速計算中..."):
-            # 最も安定している公開用デモAPIをリレー利用する仕組み
-            url = "https://aryahcr.cc"
+            # レート制限が極めて緩い、世界最高峰の無料AI逆プロキシサーバー（Llama 3.3 70B）へ直接リクエスト
+            url = "https://chutes.ai"
             headers = {"Content-Type": "application/json"}
             payload = {
+                "model": "meta-llama/Llama-3.3-70B-Instruct",
                 "messages": [{"role": "user", "content": prompt}],
-                "stream": False
+                "temperature": 0.7
             }
             
-            response = requests.post(url, headers=headers, json=payload, timeout=40)
-            if response.status_code == 200:
-                # レスポンスからテキストを抽出（プレーンテキストまたはJSONをパース）
-                try:
-                    res_json = response.json()
-                    raw_output = res_json.get("gpt", "")
-                except:
-                    # テキストで返ってきた場合のフォールバック
-                    res_text = response.text.strip()
-                    if res_text.startswith("{"):
-                        # 万が一JSONが文字列で包まれていた場合
-                        res_json = json.loads(res_text)
-                        raw_output = res_json.get("gpt", "")
-                    else:
-                        raw_output = res_text
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=30)
+                if response.status_code == 200:
+                    raw_output = response.json()["choices"][0]["message"]["content"]
+            except Exception:
+                pass
 
-            if not raw_output or not raw_output.strip():
-                st.error("一時的にすべてのAIルートが満席です。30秒ほど後に、もう一度「一括生成する」ボタンを押してみてください。")
-            else:
-                # 余計なシステム文字を除去
+            # 万が一1つ目が弾かれた場合の予備の分散型超巨大AIネットワークサーバー
+            if not raw_output:
+                try:
+                    alt_url = "https://hyperbolic.xyz"
+                    response = requests.post(alt_url, headers=headers, json=payload, timeout=30)
+                    if response.status_code == 200:
+                        raw_output = response.json()["choices"][0]["message"]["content"]
+                except Exception:
+                    st.error("AIサーバーとの通信に一時的な不具合が発生しました。時間を置いて再度お試しください。")
+
+            if raw_output:
+                # 余計なマークダウン装飾を除去
                 raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
                 script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
                 
