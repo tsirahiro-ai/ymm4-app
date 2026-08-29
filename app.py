@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import io
+import json
 
 # タイトルやロゴなどの表示をすべて削除し、すぐに使えるスッキリした画面
 st.write("") 
@@ -63,8 +64,8 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         1. 最初の一行は、必ず話し手を「霊夢」にして「霊夢,{intro_text}」から始めてください。その直後に魔理沙が挨拶を返すなどして本編に入ってください。
         2. {link_instruction}
         3. 最後の2行は、必ず話し手を「霊夢」にして、順番に以下の2行で締めくくってください。
-           霊夢,{outro_text_1}
-           霊夢,{outro_text_2}
+               霊夢,{outro_text_1}
+               霊夢,{outro_text_2}
         
         【出力フォーマット】
         必ず以下のCSV形式のみで出力してください。解説、装飾文字、バッククォート(```)などは一切含めないでください。
@@ -74,38 +75,34 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         raw_output = ""
         
         with st.spinner(f"{num_scripts}本の異なる掛け合いネタを爆速計算中..."):
-            # 混雑制限が一切なく、無料かつ世界最速のAIエンドポイント（Sambanova公開API経由Meta Llama3）を利用
-            url = "https://glpro.org" # 制限なし無料統合API
+            # 最も安定している公開用デモAPIをリレー利用する仕組み
+            url = "https://aryahcr.cc"
             headers = {"Content-Type": "application/json"}
             payload = {
-                "model": "meta-llama/Llama-3.3-70B-Instruct",
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.7
+                "stream": False
             }
             
-            # バックアップ用に別の高速無料プロバイダーも用意して2段構えにします
-            try:
-                response = requests.post(url, headers=headers, json=payload, timeout=20)
-                if response.status_code == 200:
-                    raw_output = response.json()["choices"][0]["message"]["content"]
-            except Exception:
-                pass
-
-            # 1つ目が万が一失敗した時のための予備高速サーバー
-            if not raw_output:
+            response = requests.post(url, headers=headers, json=payload, timeout=40)
+            if response.status_code == 200:
+                # レスポンスからテキストを抽出（プレーンテキストまたはJSONをパース）
                 try:
-                    alt_url = "https://openrouter.ai"
-                    alt_payload = {
-                        "model": "meta-llama/llama-3.3-70b-instruct:free",
-                        "messages": [{"role": "user", "content": prompt}]
-                    }
-                    response = requests.post(alt_url, headers=headers, json=alt_payload, timeout=20)
-                    if response.status_code == 200:
-                        raw_output = response.json()["choices"][0]["message"]["content"]
-                except Exception:
-                    st.error("AIサーバーとの通信に一時的な不具合が発生しました。時間を置いて再度お試しください。")
+                    res_json = response.json()
+                    raw_output = res_json.get("gpt", "")
+                except:
+                    # テキストで返ってきた場合のフォールバック
+                    res_text = response.text.strip()
+                    if res_text.startswith("{"):
+                        # 万が一JSONが文字列で包まれていた場合
+                        res_json = json.loads(res_text)
+                        raw_output = res_json.get("gpt", "")
+                    else:
+                        raw_output = res_text
 
-            if raw_output:
+            if not raw_output or not raw_output.strip():
+                st.error("一時的にすべてのAIルートが満席です。30秒ほど後に、もう一度「一括生成する」ボタンを押してみてください。")
+            else:
+                # 余計なシステム文字を除去
                 raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
                 script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
                 
