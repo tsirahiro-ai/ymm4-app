@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 import io
-import json
 
 # タイトルやロゴなどの表示をすべて削除し、すぐに使えるスッキリした画面
 st.write("") 
@@ -75,24 +74,46 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         raw_output = ""
         
         with st.spinner(f"{num_scripts}本の異なる掛け合いネタを爆速計算中..."):
-            # キーが完全に不要で安定性の高いパブリックリレーAPIを使用
-            url = "https://pollinations.ai"
-            payload = {
-                "messages": [
-                    {"role": "system", "content": "You are a professional script writer. Always output strictly in the requested format."},
-                    {"role": "user", "content": prompt}
-                ],
-                "model": "openai-large",
-                "json Mode": False
-            }
-            
-            response = requests.post(url, json=payload, timeout=60)
-            if response.status_code == 200:
-                raw_output = response.text.strip()
+            # 💡 ルート1: Pollinations API（直接テキスト取得）
+            try:
+                url_pollinate = "https://pollinations.ai"
+                payload_pollinate = {
+                    "messages": [{"role": "user", "content": prompt}],
+                    "model": "openai-large"
+                }
+                res = requests.post(url_pollinate, json=payload_pollinate, timeout=20)
+                if res.status_code == 200 and res.text.strip():
+                    raw_output = res.text.strip()
+            except Exception:
+                pass
 
+            # 💡 ルート2 (身代わり): Nexra API（分散サーバー）
             if not raw_output:
-                st.error("一時的にAIサーバーが混雑しています。15秒ほど後に、もう一度「一括生成する」ボタンを押してみてください。")
-            else:
+                try:
+                    url_nexra = "https://aryahcr.cc"
+                    payload_nexra = {"messages": [{"role": "user", "content": prompt}], "stream": False}
+                    res = requests.post(url_nexra, json=payload_nexra, timeout=20)
+                    if res.status_code == 200:
+                        raw_output = res.json().get("gpt", "")
+                except Exception:
+                    pass
+
+            # 💡 ルート3 (最終砦): Chutes API (エンタープライズ用無料Llama)
+            if not raw_output:
+                try:
+                    url_chutes = "https://chutes.ai"
+                    payload_chutes = {
+                        "model": "meta-llama/Llama-3.3-70B-Instruct",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.7
+                    }
+                    res = requests.post(url_chutes, json=payload_chutes, timeout=20)
+                    if res.status_code == 200:
+                        raw_output = res.json()["choices"][0]["message"]["content"]
+                except Exception:
+                    st.error("一時的にすべてのAIルートが大変混み合っています。少し時間をおいて再度お試しください。")
+
+            if raw_output:
                 # 余計なマークダウン装飾を除去
                 raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
                 script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
