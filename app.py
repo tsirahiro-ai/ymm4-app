@@ -4,9 +4,9 @@ import requests
 import io
 import json
 
-# ★タイトルを「ショート動画台本メーカー」に変更し、HTMLを使って中央揃えにしました
-st.markdown("<h1 style='text-align: center;'>🎬 ショート動画台本メーカー</h1>", unsafe_style=True)
-st.markdown("<p style='text-align: center; color: gray;'>霊夢と魔理沙の掛け合い台本を無制限に作成・一括ダウンロードできます。</p>", unsafe_style=True)
+# タイトルを「ショート動画台本メーカー」に変更し、中央揃えにしました
+st.markdown("<h1 style='text-align: center;'>🎬 ショート動画台本メーカー</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: gray;'>霊夢と魔理沙の掛け合い台本を無制限に作成・一括ダウンロードできます。</p>", unsafe_allow_html=True)
 st.write("") # スペース空け
 
 # 1. ユーザー入力エリア
@@ -93,19 +93,20 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
             payload = {
                 "inputs": f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
                 "parameters": {"max_new_tokens": 4000, "temperature": 0.7}
-            )
+            }
             
+            # 先ほどエラーになっていたカッコの閉じ忘れ部分をしっかりと修正しました
             response = requests.post(API_URL, headers=headers, json=payload)
             
             if response.status_code == 200:
                 result = response.json()
-                raw_output = result["generated_text"].split("<|im_start|>assistant\n")[-1].strip()
+                raw_output = result[0]["generated_text"].split("<|im_start|>assistant\n")[-1].strip()
             else:
                 # 予備のオープンサーバーに切り替え
                 API_URL_ALT = "https://huggingface.co"
                 response = requests.post(API_URL_ALT, headers=headers, json=payload)
                 result = response.json()
-                raw_output = result["generated_text"].split("<|im_start|>assistant\n")[-1].strip()
+                raw_output = result[0]["generated_text"].split("<|im_start|>assistant\n")[-1].strip()
             
             # 余計なマークダウン装飾を除去
             raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
