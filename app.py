@@ -3,7 +3,7 @@ import pandas as pd
 from groq import Groq
 import io
 
-st.title("📱 【無限・爆速版】霊夢＆魔理沙 ショート動画台本メーカー")
+st.title("ショート動画台本メーカー")
 st.write("回数制限なしの無料AIを使い、霊夢と魔理沙の掛け合い台本を無制限に作成・一括ダウンロードできます！")
 
 api_key = st.sidebar.text_input("Groq API Keyを入力してください", type="password")
