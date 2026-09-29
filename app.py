@@ -1,10 +1,20 @@
 import streamlit as st
 import pandas as pd
-import requests
+import google.generativeai as genai
 import io
 
 # タイトルやロゴなどの表示をすべて削除し、すぐに使えるスッキリした画面
 st.write("") 
+
+# 隠し金庫（Secrets）から安全にキーを自動取得する仕組み（エラー防止強化版）
+API_KEY = None
+for key in st.secrets.keys():
+    if "GEMINI" in key.upper() or "API_KEY" in key.upper():
+        API_KEY = st.secrets[key]
+        break
+
+if not API_KEY:
+    API_KEY = st.sidebar.text_input("Gemini API Keyを入力してください", type="password")
 
 # 1. ユーザー入力エリア
 genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "おまかせ")
@@ -29,68 +39,51 @@ custom_link_text = st.text_input(
 num_scripts = st.slider("一度に作成する動画の本数", min_value=1, max_value=15, value=5)
 
 if st.button(f"台本を {num_scripts} 本一括生成する"):
-    try:
-        # おまかせ判定
-        final_genre = genre if (genre.strip() and genre != "おまかせ") else "今ネットでバズりそうな、人間味のある面白いトレンドネタ（あるある、雑学、心理学、ライフハック、学校ネタなど何でも可）"
-        final_atmosphere = atmosphere if (atmosphere.strip() and atmosphere != "おまかせ") else "霊夢が鋭く（あるいはボケて）喋り、魔理沙が軽快にツッコむテンポの良い掛け合い"
-        
-        # 告知セリフの有無を判定
-        has_link = custom_link_text.strip() and custom_link_text != "特になし"
-        link_instruction = f"また、掛け合いが終わって動画の最後に入る直前に、自然な流れでどちらかのキャラクターが「{custom_link_text}」という告知・誘導セリフを入れてください。" if has_link else "今回は告知やリンク誘導のセリフは一切不要です。"
-
-        # プロンプトの構築（定型挨拶なし・純粋本編のみ）
-        prompt = f"""
-        あなたはTikTokやYouTube Shortsでバズる動画を手がける天才放送作家です。
-        「霊夢（れいむ）」と「魔理沙（まりさ）」の2人が、人間味あふれるリアルで面白い掛け合いをするショート動画のネタを【合計 {num_scripts} 本】考えてください。
-        
-        【超重要ルール】
-        1. それぞれの動画の内容やテーマは、すべて全く異なるエピソードやネタにしてください（使い回し厳禁）。
-        2. キャラクターのセリフの先頭につける名前は、必ず「霊夢」または「魔理沙」にしてください。
-        3. AI特有の不自然な解説や無機質な正論は禁止です。人間が日常で感じる「本音」や「クスッと笑えるユーモア」をベースにしてください。
-        
-        【動画1本あたりの条件】
-        ・ジャンル: {final_genre}
-        ・雰囲気: {final_atmosphere}
-        ・長さ: きっちり【 {target_seconds} 秒 】に収まる、1行あたり15文字前後の短いリズミカルなテンポ
-        
-        【動画1本あたりの構成ルール】
-        ・固定の挨拶や、決まったエンディングのセリフ（チャンネル登録よろしく等）は一切入れないでください。
-        ・動画の始まりから終わりまで、指定されたジャンルに沿った2人の楽しい本編トークとボケ・ツッコミの掛け合いだけで構成してください。
-        ・{link_instruction}
-        
-        【出力フォーマット】
-        必ず以下のCSV形式のみで出力してください。解説、装飾文字、バッククォート(```)などは一切含めないでください。
-        各動画の区切りとして、行の先頭に「---」だけの行を入れて区切ってください。
-        """
-
-        raw_output = ""
-        
-        with st.spinner(f"{num_scripts}本の異なる掛け合いネタを爆速計算中..."):
-            # 💡 満席エラーが絶対に起きない、世界最大の無料AIネットワークの安定ルートへ直接接続
-            url = "https://pollinations.ai"
-            payload = {
-                "messages": [
-                    {"role": "system", "content": "You are a professional video script writer. Output raw text only. Never use markdown boxes."},
-                    {"role": "user", "content": prompt}
-                ],
-                "model": "openai",
-                "cache": False
-            }
+    if not API_KEY:
+        st.error("APIキーが設定されていません。StreamlitのSecretsを設定するか、左側に入力してください。")
+    else:
+        try:
+            # Geminiの設定（最新モデルを指定）
+            genai.configure(api_key=API_KEY)
+            model = genai.GenerativeModel('gemini-2.5-flash') 
             
-            # 最大2回まで自動で繋ぎ直す安全装置付き
-            for _ in range(2):
-                try:
-                    response = requests.post(url, json=payload, timeout=30)
-                    if response.status_code == 200 and response.text.strip():
-                        raw_output = response.text.strip()
-                        break
-                except Exception:
-                    continue
+            # おまかせ判定
+            final_genre = genre if (genre.strip() and genre != "おまかせ") else "今ネットでバズりそうな、人間味のある面白いトレンドネタ（あるある、雑学、心理学、ライフハック、学校ネタなど何でも可）"
+            final_atmosphere = atmosphere if (atmosphere.strip() and atmosphere != "おまかせ") else "霊夢が鋭く（あるいはボケて）喋り、魔理沙が軽快にツッコむテンポの良い掛け合い"
+            
+            # 告知セリフの有無を判定
+            has_link = custom_link_text.strip() and custom_link_text != "特になし"
+            link_instruction = f"また、掛け合いが終わって動画の最後に入る直前に、自然な流れでどちらかのキャラクターが「{custom_link_text}」という告知・誘導セリフを入れてください。" if has_link else "今回は告知やリンク誘導のセリフは一切不要です。"
 
-            if not raw_output:
-                st.error("AIサーバーが一時的に応答していません。もう一度ボタンを押してみてください。")
-            else:
-                # 余計なマークダウン装飾を除去
+            # プロンプトの構築（定型挨拶なし・純粋本編のみ）
+            prompt = f"""
+            あなたはTikTokやYouTube Shortsでバズる動画を手がける天才放送作家です。
+            「霊夢（れいむ）」と「魔理沙（まりさ）」の2人が、人間味あふれるリアルで面白い掛け合いをするショート動画のネタを【合計 {num_scripts} 本】考えてください。
+            
+            【超重要ルール】
+            1. それぞれの動画の内容やテーマは、すべて全く異なるエピソードやネタにしてください（使い回し厳禁）。
+            2. キャラクターのセリフの先頭につける名前は、必ず「霊夢」または「魔理沙」にしてください。
+            3. AI特有の不自然な解説や無機質な正論は禁止です。人間が日常で感じる「本音」や「クスッと笑えるユーモア」をベースにしてください。
+            
+            【動画1本あたりの条件】
+            ・ジャンル: {final_genre}
+            ・雰囲気: {final_atmosphere}
+            ・長さ: きっちり【 {target_seconds} 秒 】に収まる、1行あたり15文字前後の短いリズミカルなテンポ
+            
+            【動画1本あたりの構成ルール】
+            ・固定の挨拶や、決まったエンディングのセリフ（チャンネル登録よろしく等）は一切入れないでください。
+            ・動画の始まりから終わりまで、指定されたジャンルに沿った2人の楽しい本編トークとボケ・ツッコミの掛け合いだけで構成してください。
+            ・{link_instruction}
+            
+            【出力フォーマット】
+            必ず以下のCSV形式のみで出力してください。解説、装飾文字、バッククォート(```)などは一切含めないでください。
+            各動画の区切りとして、行の先頭に「---」だけの行を入れて区切ってください。
+            """
+
+            with st.spinner(f"{num_scripts} 本の台本を計算中..."):
+                response = model.generate_content(prompt)
+                raw_output = response.text.strip()
+                
                 raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
                 script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
                 
@@ -133,5 +126,5 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                     )
                     all_download_container.success("一括ダウンロードファイルの準備が完了しました！")
                     
-    except Exception as e:
-        st.error(f"プログラムエラーが発生しました: {e}")
+        except Exception as e:
+            st.error(f"エラーが発生しました: {e}")
