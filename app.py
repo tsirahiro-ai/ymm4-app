@@ -3,6 +3,7 @@ import pandas as pd
 import io
 import time
 import random
+import zipfile  # ★バラバラのファイルを1つのZIPにまとめるシステムを追加
 
 # タイトルやロゴなどの表示をすべて削除し、すぐに使えるスッキリした画面
 st.write("") 
@@ -35,7 +36,7 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         min_lines = max(4, int((target_seconds - 5) / 2.2))
         max_lines = int((target_seconds + 5) / 2.2)
         
-        # 💡 毎回完全にランダムでバラバラのバズ台本を組み立てるための超巨大データベース
+        # 毎回完全にランダムでバラバラのバズ台本を組み立てるための超巨大データベース
         topics_pool = [
             "ずる賢い心理学", "学校の闇あるある", "大人の爆笑雑学", "職場のスカッとする話", 
             "ネットで話題の嘘のような本当の話", "知ると得する裏ワザ", "勘違いしやすい常識", 
@@ -66,7 +67,6 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         has_link = custom_link_text.strip() and custom_link_text != "特になし"
 
         for i in range(num_scripts):
-            # ボタンを押すたびに完全にシャッフルして新しい組み合わせを作る
             random.shuffle(topics_pool)
             random.shuffle(bokes_pool)
             random.shuffle(tsukkomis_pool)
@@ -90,10 +90,9 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                 f"魔理沙,{ts3}"
             ]
             
-            # 💡 指定された±5秒の行数に合わせるため、完全にバラバラの文章を自動追加して引き伸ばす
             extra_lines_pool = [
                 ("霊夢,これがネットで爆伸びする最新の仕掛けよ。", "魔理沙,なるほど、人間の心理を完璧に突いてるな。"),
-                ("霊夢,知っておくだけで損を回避できる知識よ。", "魔理沙,確かに、これは友達に即話したくなるわ。"),
+                ("霊夢,知っておくだけで損を回避する知識よ。", "魔理沙,確かに、これは友達に即話したくなるわ。"),
                 ("霊夢,日常の不満を一瞬でスカッとさせる裏ワザね。", "魔理沙,明日から職場でさっそく試してみる価値あるな。"),
                 ("霊夢,小学生でも一瞬で理解できるシンプルな話よ。", "魔理沙,わかりやすさが第一だから、一番バズるテンポだな。")
             ]
@@ -106,12 +105,10 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                 if len(raw_lines) < min_lines:
                     raw_lines.append(extra_m)
                     
-            # 行数が多すぎる場合は厳密にカット
             if len(raw_lines) > max_lines:
                 raw_lines = raw_lines[:max_lines]
                 
             if has_link:
-                # 告知用セリフを最後から2番目に自然に挿入
                 raw_lines.insert(-1, f"霊夢,あ、そういえば「{custom_link_text}」もチェックしてね。")
                 raw_lines.insert(-1, "魔理沙,おっと、最後に大事な誘導を滑り込ませてきたな！")
                 
@@ -119,7 +116,6 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
             
         raw_output = "\n---\n".join(blocks)
 
-        # 高速カタカタストリーミング演出
         status_text = st.empty()
         for k in range(1, len(raw_output) + 1, max(1, len(raw_output)//40)):
             status_text.code(raw_output[:k], language="text")
@@ -128,9 +124,12 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
 
         if raw_output:
             script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
-            all_dfs = []
+            
+            # ★ZIPファイル用の中身を一時保存する配列を用意
+            zip_file_contents = []
+            
             all_download_container = st.container()
-            all_download_container.write("### 📥 まめて一括ダウンロード")
+            all_download_container.write("### 📥 まとめて一括ダウンロード")
             st.write("---")
             
             for i, block in enumerate(script_blocks[:num_scripts]):
@@ -140,32 +139,39 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                 lines = [line.split(",", 1) for line in block.split("\n") if "," in line]
                 df = pd.DataFrame(lines, columns=["キャラクター名", "セリフ"])
                 st.dataframe(df)
-                all_dfs.append(df)
                 
+                # 単品保存データの作成
                 csv_buffer = io.StringIO()
                 df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+                
+                # ★ZIP用に「ファイル名」と「CSVの中身」をセットで保存しておく
+                file_name = f"ymm4_script_part{i+1}.csv"
+                zip_file_contents.append((file_name, csv_buffer.getvalue()))
+                
                 st.download_button(
                     label=f"動画 {i+1} 本目だけをダウンロード", 
                     data=csv_buffer.getvalue().encode('utf-8-sig'),
-                    file_name=f"ymm4_script_part{i+1}.csv", 
+                    file_name=file_name, 
                     mime="text/csv", key=f"btn_{i}"
                 )
                 st.write("---")
             
-            if all_dfs:
-                combined_csv_content = "キャラクター名,セリフ\n"
-                for current_df in all_dfs:
-                    csv_text = current_df.to_csv(index=False, header=False, encoding="utf-8-sig")
-                    combined_csv_content += csv_text
-                    combined_csv_content += ",\n"
+            # ★すべてのCSVファイルをバラバラのまま1つのZIPフォルダーにまとめる魔法の処理
+            if zip_file_contents:
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for f_name, csv_data in zip_file_contents:
+                        # ZIPフォルダーのなかにバラバラのファイルとして書き込む
+                        zf.writestr(f_name, csv_data.encode('utf-8-sig'))
                 
+                # 画面の最上部の一括ダウンロードボタンをZIP保存ボタンに変更
                 all_download_container.download_button(
-                    label=f"🔥 全 {len(all_dfs)} 本のネタを1つのファイルにまとめてダウンロード",
-                    data=combined_csv_content.encode('utf-8-sig'),
-                    file_name="ymm4_all_scripts_combined.csv",
-                    mime="text/csv", key="btn_all_combined"
+                    label=f"🔥 全 {len(zip_file_contents)} 本の台本を別々のCSVファイルにして1つのZIPで一括保存",
+                    data=zip_buffer.getvalue(),
+                    file_name="ymm4_all_scripts_files.zip",
+                    mime="application/zip", key="btn_all_zip_combined"
                 )
-                all_download_container.success("一括ダウンロードファイルの準備が完了しました！")
+                all_download_container.success("一括ZIPファイルの準備が完了しました！解凍すると各々のCSVファイルが現れます！")
                 
     except Exception as e:
         st.error(f"プログラムエラーが発生しました: {e}")
