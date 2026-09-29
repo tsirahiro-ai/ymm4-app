@@ -3,7 +3,7 @@ import pandas as pd
 import io
 import time
 import random
-import zipfile  # ★バラバラのファイルを1つのZIPにまとめるシステムを追加
+import zipfile
 
 # タイトルやロゴなどの表示をすべて削除し、すぐに使えるスッキリした画面
 st.write("") 
@@ -63,13 +63,23 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
             "わかるわ、あの謎の夜更かしの誘惑はヤバいよな。", "聞き手に回って相手に気持ちよく喋らせる技か！"
         ]
 
-        blocks = []
+        # 追加用の短いセリフプール
+        extra_lines_pool = [
+            ("霊夢,これがネットで爆伸びする最新の仕掛けよ。", "魔理沙,なるほど、人間の心理を完璧に突いてるな。"),
+            ("霊夢,知っておくだけで損を回避する知識よ。", "魔理沙,確かに、これは友達に即話したくなるわ。"),
+            ("霊夢,日常の不満を一瞬でスカッとさせる裏ワザね。", "魔理沙,明日から職場でさっそく試してみる価値あるな。"),
+            ("霊夢,小学生でも一瞬で理解できるシンプルな話よ。", "魔理沙,わかりやすさが第一だから、一番バズるテンポだな。")
+        ]
+
+        generated_blocks = []
         has_link = custom_link_text.strip() and custom_link_text != "特になし"
 
+        # 指定本数分の台本を作成
         for i in range(num_scripts):
             random.shuffle(topics_pool)
             random.shuffle(bokes_pool)
             random.shuffle(tsukkomis_pool)
+            random.shuffle(extra_lines_pool)
             
             t = topics_pool[0]
             b1 = bokes_pool[0]
@@ -90,19 +100,13 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                 f"魔理沙,{ts3}"
             ]
             
-            extra_lines_pool = [
-                ("霊夢,これがネットで爆伸びする最新の仕掛けよ。", "魔理沙,なるほど、人間の心理を完璧に突いてるな。"),
-                ("霊夢,知っておくだけで損を回避する知識よ。", "魔理沙,確かに、これは友達に即話したくなるわ。"),
-                ("霊夢,日常の不満を一瞬でスカッとさせる裏ワザね。", "魔理沙,明日から職場でさっそく試してみる価値あるな。"),
-                ("霊夢,小学生でも一瞬で理解できるシンプルな話よ。", "魔理沙,わかりやすさが第一だから、一番バズるテンポだな。")
-            ]
-            random.shuffle(extra_lines_pool)
-            
+            # 指定された±5秒の範囲の行数に収まるようにランダムにセリフを引き伸ばす（バリエーション作成）
+            target_line_count = random.randint(min_lines, max_lines)
             for extra_r, extra_m in extra_lines_pool:
-                if len(raw_lines) >= min_lines:
+                if len(raw_lines) >= target_line_count:
                     break
                 raw_lines.append(extra_r)
-                if len(raw_lines) < min_lines:
+                if len(raw_lines) < target_line_count:
                     raw_lines.append(extra_m)
                     
             if len(raw_lines) > max_lines:
@@ -112,9 +116,14 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                 raw_lines.insert(-1, f"霊夢,あ、そういえば「{custom_link_text}」もチェックしてね。")
                 raw_lines.insert(-1, "魔理沙,おっと、最後に大事な誘導を滑り込ませてきたな！")
                 
-            blocks.append("\n".join(raw_lines))
+            # 作成したセリフのリストを行数（長さ）と一緒に保存
+            generated_blocks.append(raw_lines)
             
-        raw_output = "\n---\n".join(blocks)
+        # ★【重要】すべての台本を「セリフの行数が一番長いものから順番（降順）」に並び替える魔法の処理
+        generated_blocks.sort(key=len, reverse=True)
+
+        # カタカタと文字が流れるストリーミング演出用にテキストを合体
+        raw_output = "\n---\n".join(["\n".join(b) for b in generated_blocks])
 
         status_text = st.empty()
         for k in range(1, len(raw_output) + 1, max(1, len(raw_output)//40)):
@@ -122,29 +131,26 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
             time.sleep(0.002)
         status_text.empty()
 
-        if raw_output:
-            script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
-            
-            # ★ZIPファイル用の中身を一時保存する配列を用意
+        if generated_blocks:
             zip_file_contents = []
-            
             all_download_container = st.container()
             all_download_container.write("### 📥 まとめて一括ダウンロード")
             st.write("---")
             
-            for i, block in enumerate(script_blocks[:num_scripts]):
-                actual_lines = [line for line in block.split("\n") if "," in line]
-                st.subheader(f"🎬 動画 {i+1} 本目 (±5秒字幕最適化済み・合計 {len(actual_lines)} 行)")
+            # 長い順に並び替えたリストをループ処理して画面に表示
+            for i, block_lines in enumerate(generated_blocks):
+                st.subheader(f"🎬 動画 {i+1} 本目 (±5秒字幕最適化済み・合計 {len(block_lines)} 行)")
                 
-                lines = [line.split(",", 1) for line in block.split("\n") if "," in line]
-                df = pd.DataFrame(lines, columns=["キャラクター名", "セリフ"])
+                # データフレームの作成
+                lines_split = [line.split(",", 1) for line in block_lines if "," in line]
+                df = pd.DataFrame(lines_split, columns=["キャラクター名", "セリフ"])
                 st.dataframe(df)
                 
                 # 単品保存データの作成
                 csv_buffer = io.StringIO()
                 df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
                 
-                # ★ZIP用に「ファイル名」と「CSVの中身」をセットで保存しておく
+                # ZIP用に「ファイル名」と「CSVの中身」をセットで保存（ここでも長い順番に保存されます）
                 file_name = f"ymm4_script_part{i+1}.csv"
                 zip_file_contents.append((file_name, csv_buffer.getvalue()))
                 
@@ -156,22 +162,20 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
                 )
                 st.write("---")
             
-            # ★すべてのCSVファイルをバラバラのまま1つのZIPフォルダーにまとめる魔法の処理
+            # まとめてZIPにする処理
             if zip_file_contents:
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
                     for f_name, csv_data in zip_file_contents:
-                        # ZIPフォルダーのなかにバラバラのファイルとして書き込む
                         zf.writestr(f_name, csv_data.encode('utf-8-sig'))
                 
-                # 画面の最上部の一括ダウンロードボタンをZIP保存ボタンに変更
                 all_download_container.download_button(
-                    label=f"🔥 全 {len(zip_file_contents)} 本の台本を別々のCSVファイルにして1つのZIPで一括保存",
+                    label=f"🔥 【最長台本順】全 {len(zip_file_contents)} 本の台本を別々のCSVにして1つのZIPで一括保存",
                     data=zip_buffer.getvalue(),
                     file_name="ymm4_all_scripts_files.zip",
-                    mime="application/zip", key="btn_all_zip_combined"
+                    mime="application/zip", key="btn_all_zip_combined_desc"
                 )
-                all_download_container.success("一括ZIPファイルの準備が完了しました！解凍すると各々のCSVファイルが現れます！")
+                all_download_container.success("一括ZIPファイルの準備が完了しました！解凍すると一番長い台本順にCSVファイルが現れます！")
                 
     except Exception as e:
         st.error(f"プログラムエラーが発生しました: {e}")
