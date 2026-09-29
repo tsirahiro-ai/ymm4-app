@@ -43,9 +43,10 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         st.error("APIキーが設定されていません。StreamlitのSecretsを設定するか、左側に入力してください。")
     else:
         try:
-            # Geminiの設定（最新モデルを指定）
+            # Geminiの設定
             genai.configure(api_key=API_KEY)
-            model = genai.GenerativeModel('gemini-2.5-flash') 
+            # ★エラーの指示通り、最新のgemini-3.8-flashにアップデートしました
+            model = genai.GenerativeModel('gemini-3.8-flash') 
             
             # おまかせ判定
             final_genre = genre if (genre.strip() and genre != "おまかせ") else "今ネットでバズりそうな、人間味のある面白いトレンドネタ（あるある、雑学、心理学、ライフハック、学校ネタなど何でも可）"
