@@ -6,7 +6,7 @@ import io
 # タイトルやロゴなどの表示をすべて削除し、すぐに使えるスッキリした画面
 st.write("") 
 
-# 隠し金庫（Secrets）から安全にキーを自動取得する仕組み（エラー防止強化版）
+# 隠し金庫（Secrets）から安全にキーを自動取得
 API_KEY = None
 for key in st.secrets.keys():
     if "GEMINI" in key.upper() or "API_KEY" in key.upper():
@@ -20,7 +20,7 @@ if not API_KEY:
 genre = st.text_input("動画のジャンル（『おまかせ』や空欄でもOK）", "おまかせ")
 atmosphere = st.text_input("どんな感じの動画がいいか（『おまかせ』や空欄でもOK）", "おまかせ")
 
-# 目標秒数の指定（数字で直接入力可能）
+# 目標秒数の指定
 target_seconds = st.number_input(
     "動画の目標長さ（秒数を数字で指定してください）", 
     min_value=5, 
@@ -43,20 +43,16 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
         st.error("APIキーが設定されていません。StreamlitのSecretsを設定するか、左側に入力してください。")
     else:
         try:
-            # Geminiの設定
             genai.configure(api_key=API_KEY)
-            # ★エラーの指示通り、最新のgemini-3.8-flashにアップデートしました
-            model = genai.GenerativeModel('gemini-3.8-flash') 
+            model = genai.GenerativeModel('gemini-2.5-flash') # 安定稼働モデル
             
             # おまかせ判定
             final_genre = genre if (genre.strip() and genre != "おまかせ") else "今ネットでバズりそうな、人間味のある面白いトレンドネタ（あるある、雑学、心理学、ライフハック、学校ネタなど何でも可）"
             final_atmosphere = atmosphere if (atmosphere.strip() and atmosphere != "おまかせ") else "霊夢が鋭く（あるいはボケて）喋り、魔理沙が軽快にツッコむテンポの良い掛け合い"
             
-            # 告知セリフの有無を判定
             has_link = custom_link_text.strip() and custom_link_text != "特になし"
             link_instruction = f"また、掛け合いが終わって動画の最後に入る直前に、自然な流れでどちらかのキャラクターが「{custom_link_text}」という告知・誘導セリフを入れてください。" if has_link else "今回は告知やリンク誘導のセリフは一切不要です。"
 
-            # プロンプトの構築（定型挨拶なし・純粋本編のみ）
             prompt = f"""
             あなたはTikTokやYouTube Shortsでバズる動画を手がける天才放送作家です。
             「霊夢（れいむ）」と「魔理沙（まりさ）」の2人が、人間味あふれるリアルで面白い掛け合いをするショート動画のネタを【合計 {num_scripts} 本】考えてください。
@@ -81,10 +77,23 @@ if st.button(f"台本を {num_scripts} 本一括生成する"):
             各動画の区切りとして、行の先頭に「---」だけの行を入れて区切ってください。
             """
 
-            with st.spinner(f"{num_scripts} 本の台本を計算中..."):
-                response = model.generate_content(prompt)
-                raw_output = response.text.strip()
-                
+            # 💡 待ち時間を無くすリアルタイムテキスト表示エリアを作成
+            status_text = st.empty()
+            raw_output = ""
+            
+            # 裏側で文字が出来上がった瞬間に、画面へ次々と流し込む魔法の処理（Stream生成）
+            response = model.generate_content(prompt, stream=True)
+            
+            for chunk in response:
+                if chunk.text:
+                    raw_output += chunk.text
+                    # 考えている途中の台本をリアルタイムで画面に表示
+                    status_text.code(raw_output.replace("```csv", "").replace("```", ""), language="text")
+
+            # すべて書き終わったら、表示エリアをクリアして綺麗な表（データフレーム）に変換
+            status_text.empty()
+            
+            if raw_output:
                 raw_output = raw_output.replace("```csv", "").replace("```", "").strip()
                 script_blocks = [block.strip() for block in raw_output.split("---") if block.strip()]
                 
